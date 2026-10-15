@@ -45,7 +45,7 @@ There are two ways to give it a key:
 
 | Layer | Contents |
 |---|---|
-| `engine/` | Card evaluator (treys-compatible ranks), hand utilities, preflop ranking, villain/rake models, Monte-Carlo simulator |
+| `engine/` | Card evaluator (treys-compatible ranks), hand utilities, preflop ranking, villain/rake models, Monte-Carlo simulator. Postflop matches the Python engine; preflop is more realistic (only seats behind hero act, blinds count toward their bets, results are measured against folding, 3-bet pots are priced properly, no BB opens) |
 | `parsing/` | Offline description/seat-note parsers, archetypes, `TableState` |
 | `advisor/` | Knowledge base, TF-IDF retriever, profile extraction, prompts, offline report |
 | `data/` | Room (`runs` table), DataStore (settings, API key, live table), `ClaudeService` (Anthropic Java SDK), `CoachRepository` (Claude with offline fallback), `SimulationRunner` |

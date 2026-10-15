@@ -17,6 +17,12 @@ import kotlin.random.Random
  * hero plays a defined open-and-value-bet line, and we measure hero's average
  * chip delta (bb) each time a hand is opened. Trust the relative ordering far
  * more than the exact numbers.
+ *
+ * The postflop model matches `engine.py`; preflop is more realistic than the original:
+ * only the seats behind hero act (earlier seats folded), blinds count toward their raises
+ * and calls, results are measured against folding (a posted blind is sunk), players facing
+ * a 3-bet cold continue only with their 3-bet range, flatters fold to a 3-bet, and the BB
+ * can't open (it acts last).
  */
 object Simulator {
     // Postflop decision thresholds (made-strength fractions). ASSUMPTION: coarse by design.
@@ -33,8 +39,9 @@ object Simulator {
     }
 
     /**
-     * Simulate ONE hand where hero open-raises [heroHand] from [heroPos].
-     * Returns hero's result in big blinds (can be negative).
+     * Simulate ONE hand where hero open-raises [heroHand] from [heroPos] (any seat but the BB).
+     * Returns hero's result in big blinds relative to folding preflop: 0 = same as folding, so a
+     * blind hero already posted isn't counted as a loss.
      */
     fun simulateHand(
         heroHand: String,
@@ -50,45 +57,62 @@ object Simulator {
         val hero = Hands.toCombo(heroHand, dead, rng) ?: return 0.0
         dead = dead or Cards.bit(hero[0]) or Cards.bit(hero[1])
 
+        val labels = Positions.forSeats(nSeats)
+        val heroIdx = labels.indexOf(heroPos)
+        require(heroIdx >= 0) { "$heroPos isn't a seat at a $nSeats-handed table" }
+        require(heroPos != "BB") { "The big blind acts last preflop, so it can't open" }
+
+        // Blinds are already in the pot. A raise from the SB includes its posted 0.5.
+        val heroBlind = blindOf(heroPos)
         var pot = 1.5 // SB 0.5 + BB 1.0
-        var heroInvested = when (heroPos) { "SB" -> 0.5; "BB" -> 1.0; else -> 0.0 }
-        heroInvested += openSize
-        pot += openSize
+        var heroInvested = openSize
+        pot += openSize - heroBlind
         var curBet = openSize
 
-        // Villains behind decide; each seat may use its own model.
+        // Hero is opening, so every seat before hero folded. Only the seats behind act, in order;
+        // each seat may use its own model.
         var callers = ArrayList<Pair<IntArray, Villain>>()
         var threebet: Pair<IntArray, Villain>? = null
-        for (seat in Positions.forSeats(nSeats)) {
-            if (seat == heroPos) continue
+        val coldCallers = ArrayList<Pair<IntArray, Villain>>()
+        for (seat in labels.subList(heroIdx + 1, labels.size)) {
             val m = seatModels?.get(seat) ?: v
             val vc = Hands.toCombo(Hands.ALL_169.random(rng), dead, rng) ?: continue
             val vClass = Hands.classOf(vc[0], vc[1])
-            if (m.will3bet(vClass) && threebet == null && rng.nextDouble() < 0.8) {
-                threebet = vc to m
+            val blind = blindOf(seat)
+            if (threebet == null) {
+                if (m.will3bet(vClass) && rng.nextDouble() < 0.8) {
+                    threebet = vc to m
+                    dead = dead or Cards.bit(vc[0]) or Cards.bit(vc[1])
+                    curBet = openSize * 3
+                    pot += curBet - blind
+                } else if (m.will3bet(vClass) || m.willCallOpen(vClass)) {
+                    // A 3-bet hand that doesn't 3-bet (the other 20%) flats rather than folding.
+                    callers += vc to m
+                    dead = dead or Cards.bit(vc[0]) or Cards.bit(vc[1])
+                    pot += openSize - blind
+                }
+            } else if (m.will3bet(vClass)) {
+                // ASSUMPTION: facing a 3-bet cold, a player continues only with its own 3-bet range (and calls).
+                coldCallers += vc to m
                 dead = dead or Cards.bit(vc[0]) or Cards.bit(vc[1])
-                val size = openSize * 3
-                pot += size
-                curBet = size
-            } else if (m.willCallOpen(vClass)) {
-                callers += vc to m
-                dead = dead or Cards.bit(vc[0]) or Cards.bit(vc[1])
-                pot += openSize
+                pot += curBet - blind
             }
         }
 
         if (threebet != null) {
-            // ASSUMPTION: hero continues vs a 3-bet only with the top ~8% of hands.
+            // ASSUMPTION: players who flatted the open fold to the 3-bet (their range sits below a 3-bet
+            // range); their calls stay in the pot. Hero continues only with the top ~8% of hands.
             if (Ranking[heroHand] >= 0.92) {
                 val call = curBet - openSize
                 heroInvested += call
                 pot += call
-                callers = arrayListOf(threebet) // heads-up vs the 3-bettor
+                callers = arrayListOf(threebet)
+                callers += coldCallers
             } else {
-                return -heroInvested
+                return heroBlind - heroInvested
             }
         }
-        if (callers.isEmpty()) return pot - heroInvested // everyone folded to hero's open
+        if (callers.isEmpty()) return pot - heroInvested + heroBlind // everyone folded to hero's open
 
         // ---- postflop ----
         val board = dealBoard(dead, rng)
@@ -132,7 +156,7 @@ object Simulator {
                         val call = min(toCall, heroP.rem)
                         heroP.rem -= call; heroInvested += call; pot += call
                     } else {
-                        return -heroInvested
+                        return heroBlind - heroInvested
                     }
                 }
             } else {
@@ -151,7 +175,7 @@ object Simulator {
                         val pay = min(lead, heroP.rem)
                         heroP.rem -= pay; heroInvested += pay; pot += pay
                     } else {
-                        return -heroInvested
+                        return heroBlind - heroInvested
                     }
                 }
             }
@@ -162,10 +186,12 @@ object Simulator {
         val heroRank = Evaluator.evaluate(heroP.c1, heroP.c2, board)
         val ranks = villains.filter { !it.folded }.map { Evaluator.evaluate(it.c1, it.c2, board) }
         val best = minOf(heroRank, ranks.minOrNull() ?: Int.MAX_VALUE)
-        if (heroRank != best) return -heroInvested
+        if (heroRank != best) return heroBlind - heroInvested
         val winners = 1 + ranks.count { it == best }
-        return pot / winners - heroInvested
+        return pot / winners - heroInvested + heroBlind
     }
+
+    private fun blindOf(pos: String) = when (pos) { "SB" -> 0.5; "BB" -> 1.0; else -> 0.0 }
 
     private fun dealBoard(dead: Long, rng: Random): IntArray {
         val deck = IntArray(52 - java.lang.Long.bitCount(dead))

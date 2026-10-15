@@ -50,8 +50,11 @@ inline fun <reified VM : ViewModel> appViewModelFactory(
     }
 }
 
-/** Late positions first: the reference position for the advisor is the first one selected. */
-val POSITION_ORDER = listOf("BTN", "CO", "HJ", "LJ", "MP", "UTG+1", "UTG", "SB", "BB")
+/**
+ * Seats hero can open from, late positions first (the advisor's reference is the first one selected).
+ * No BB: it acts last preflop, so there's no open to simulate.
+ */
+val POSITION_ORDER = listOf("BTN", "CO", "HJ", "LJ", "MP", "UTG+1", "UTG", "SB")
 
 @Composable
 fun SectionCard(modifier: Modifier = Modifier, title: String? = null, content: @Composable ColumnScope.() -> Unit) {

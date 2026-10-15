@@ -238,7 +238,7 @@ fun AnalyzeScreen(
                     is SimState.Running -> RunProgress("Simulating · ${s.villainTag}", s.progress, s.source, vm::cancel)
                     else -> Button(
                         onClick = startRun,
-                        enabled = description.isNotBlank() && settings.positions.any { it in table.labels },
+                        enabled = description.isNotBlank() && POSITION_ORDER.any { it in settings.positions && it in table.labels },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                     ) {
                         Icon(Icons.Outlined.PlayArrow, null)

@@ -127,4 +127,30 @@ class EngineTest {
         println("BENCH full 169-hand grid x 400 sims, 1 position: ${"%.0f".format(ms)} ms")
         assertEquals(169, r.getValue("BTN").size)
     }
+
+    // ---- preflop action order and blind accounting (beyond the Python original) ----
+
+    /** Continues only with AA: `threebetPct`/`callOpenPct` 0 leave just the 1.0-percentile hand. */
+    private val foldsAlmostEverything = Villain(threebetPct = 0.0, callOpenPct = 0.0)
+
+    private fun ev(hand: String, pos: String, seats: Int = 9, models: Map<String, Villain>? = null, n: Int = 3000) =
+        runBlocking {
+            Simulator.runStats(foldsAlmostEverything, listOf(pos), n, nSeats = seats, subset = listOf(hand),
+                seatModels = models, rake = Rake(enabled = false), seed = 3)
+        }.getValue(pos).getValue(hand).mean
+
+    @Test fun onlySeatsBehindHeroAct() {
+        // Stations sit UTG..CO, but they acted before the button and folded, so a BTN open only faces the blinds.
+        val stations = listOf("UTG", "UTG+1", "MP", "LJ", "HJ", "CO").associateWith { Villain(callOpenPct = 0.7, station = 0.97) }
+        assertEquals(1.5, ev("72o", "BTN", models = stations), 0.2) // steals the blinds ~99% of the time
+    }
+
+    @Test fun smallBlindOpen_isMeasuredAgainstFolding() {
+        // Heads-up SB steal: wins the BB's 1.0 instead of losing the posted 0.5 -> +1.5 versus folding.
+        assertEquals(1.5, ev("72o", "SB", seats = 2), 0.2)
+    }
+
+    @Test(expected = IllegalArgumentException::class) fun bigBlind_cannotOpen() {
+        Simulator.simulateHand("AA", "BB", Villain(), Random(1))
+    }
 }
