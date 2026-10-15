@@ -1,0 +1,118 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "0bbf65bd301f9f98e5e882a747a2fe9c",
+    "entities": [
+      {
+        "tableName": "runs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `createdAt` INTEGER NOT NULL, `description` TEXT NOT NULL, `villainJson` TEXT NOT NULL, `positionsCsv` TEXT NOT NULL, `handsPerCell` INTEGER NOT NULL, `seats` INTEGER NOT NULL, `rakeJson` TEXT NOT NULL, `resultsJson` TEXT NOT NULL, `parsedBy` TEXT NOT NULL, `parseNote` TEXT, `seatReadsJson` TEXT NOT NULL, `reportMarkdown` TEXT, `reportSource` TEXT, `retrievedIdsCsv` TEXT, `followupsJson` TEXT NOT NULL DEFAULT '[]')",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "villainJson",
+            "columnName": "villainJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "positionsCsv",
+            "columnName": "positionsCsv",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "handsPerCell",
+            "columnName": "handsPerCell",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seats",
+            "columnName": "seats",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rakeJson",
+            "columnName": "rakeJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "resultsJson",
+            "columnName": "resultsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parsedBy",
+            "columnName": "parsedBy",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parseNote",
+            "columnName": "parseNote",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "seatReadsJson",
+            "columnName": "seatReadsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reportMarkdown",
+            "columnName": "reportMarkdown",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "reportSource",
+            "columnName": "reportSource",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "retrievedIdsCsv",
+            "columnName": "retrievedIdsCsv",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "followupsJson",
+            "columnName": "followupsJson",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'[]'"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0bbf65bd301f9f98e5e882a747a2fe9c')"
+    ]
+  }
+}
