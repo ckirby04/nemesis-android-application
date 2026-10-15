@@ -8,6 +8,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -45,17 +46,22 @@ class AppFlowTest {
     private fun tab(label: String) =
         compose.onNode(hasText(label) and hasClickAction() and hasAnyAncestor(hasTestTag("nav_bar"))).performClick()
 
+    /** Wait for [text] to appear: screens load asynchronously and tab switches cross-fade (slow on CI emulators). */
+    private fun awaitText(text: String, timeoutMillis: Long = 10_000) = compose.waitUntil(timeoutMillis) {
+        compose.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+    }
+
     @Test
     fun bottomNavigation_reachesEveryTab() {
-        compose.onNodeWithText("Run simulation").assertExists()
+        awaitText("Run simulation")
         tab("Table")
-        compose.onNodeWithText("Live table").assertExists()
+        awaitText("Live table")
         tab("History")
-        compose.onNodeWithText("No runs yet").assertExists()
+        awaitText("No runs yet")
         tab("Settings")
-        compose.onNodeWithText("Anthropic API key").assertExists()
+        awaitText("Anthropic API key")
         tab("Analyze")
-        compose.onNodeWithText("Run simulation").assertExists()
+        awaitText("Run simulation")
     }
 
     @Test

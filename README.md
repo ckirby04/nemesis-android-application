@@ -1,6 +1,6 @@
 # Nemesis (Android)
 
-[![CI](https://github.com/ckirby04/nemesis-android/actions/workflows/ci.yml/badge.svg)](https://github.com/ckirby04/nemesis-android/actions/workflows/ci.yml)
+[![CI](https://github.com/ckirby04/nemesis-android-application/actions/workflows/ci.yml/badge.svg)](https://github.com/ckirby04/nemesis-android-application/actions/workflows/ci.yml)
 
 A mobile port of [Nemesis](https://github.com/ckirby04/Nemesis), an exploitative poker EV simulator. Describe your
 low-stakes table in plain English, and Nemesis models the opponent pool and Monte-Carlo-simulates which starting
