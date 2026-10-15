@@ -13,11 +13,17 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.requestFocus
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
 import io.github.ckirby04.nemesis.data.Source
 import io.github.ckirby04.nemesis.data.Sourced
@@ -104,6 +110,40 @@ class AppFlowTest {
         compose.onNodeWithText("Saved table for the history test").performClick()
         compose.waitUntilExactlyOneExists(hasText("Results"))
         compose.onNodeWithText("“Saved table for the history test”").assertExists()
+    }
+
+    /** Repeated Enter on a focused Back arrow (it keeps focus while the screen fades out) must pop only once. */
+    @Test
+    fun repeatedBackKeyPresses_neverLeaveABlankScreen() {
+        runBlocking {
+            app.container.runs.save(
+                description = "Saved table for the back-key test",
+                villain = Sourced(Villain(), Source.OFFLINE),
+                positions = listOf("BTN"),
+                handsPerCell = 100,
+                seats = 9,
+                rake = Rake(),
+                results = mapOf("BTN" to mapOf("AA" to Cell(20.0, 1.0, 100))),
+                seatReads = emptyMap(),
+            )
+        }
+        tab("History")
+        compose.waitUntilExactlyOneExists(hasText("Saved table for the back-key test"))
+        compose.onNodeWithText("Saved table for the back-key test").performClick()
+        compose.waitUntilExactlyOneExists(hasText("Results"))
+
+        // Freeze the transition so the fading Results screen (and its focused Back arrow) stays put.
+        compose.mainClock.autoAdvance = false
+        val back = compose.onNodeWithContentDescription("Back")
+        compose.activityRule.scenario.onActivity { it.window.decorView.requestFocus() }
+        InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
+        back.requestFocus().assertIsFocused()
+        repeat(3) { back.performKeyInput { pressKey(Key.Enter) } }
+        compose.mainClock.autoAdvance = true
+
+        // One pop: back on History with the bottom bar, not an empty NavHost.
+        awaitText("Saved table for the back-key test")
+        compose.onNodeWithTag("nav_bar").assertExists()
     }
 
     @Test

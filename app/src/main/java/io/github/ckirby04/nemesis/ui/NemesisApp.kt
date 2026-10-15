@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -65,6 +66,15 @@ private fun NavHostController.switchTab(route: Any) = navigate(route) {
     popUpTo(graph.findStartDestination().id) { saveState = true }
     launchSingleTop = true
     restoreState = true
+}
+
+/**
+ * Runs [action] only while [entry] is still the top of the back stack. A screen that is animating out
+ * keeps its buttons (and keyboard focus), so a repeated Enter or a double tap would otherwise pop
+ * twice — popping the start destination and leaving an empty, blank NavHost.
+ */
+private inline fun NavHostController.ifCurrent(entry: NavBackStackEntry, action: () -> Unit) {
+    if (currentBackStackEntry?.id == entry.id) action()
 }
 
 @Composable
@@ -115,14 +125,17 @@ fun NemesisApp(openRun: StateFlow<Long?> = MutableStateFlow(null), onRunOpened: 
                 AnalyzeScreen(onOpenSettings = { nav.switchTab(SettingsRoute) }, onOpenTable = { nav.switchTab(TableRoute) })
             }
             composable<TableRoute> { TableScreen() }
-            composable<HistoryRoute> {
-                HistoryScreen(onOpenRun = { nav.navigate(ResultsRoute(it)) }, onNewRun = { nav.switchTab(AnalyzeRoute) })
+            composable<HistoryRoute> { entry ->
+                HistoryScreen(onOpenRun = { nav.ifCurrent(entry) { nav.navigate(ResultsRoute(it)) } }, onNewRun = { nav.switchTab(AnalyzeRoute) })
             }
             composable<SettingsRoute> { SettingsScreen() }
-            composable<ResultsRoute> {
-                ResultsScreen(onBack = { nav.popBackStack() }, onOpenReport = { nav.navigate(ReportRoute(it)) })
+            composable<ResultsRoute> { entry ->
+                ResultsScreen(
+                    onBack = { nav.ifCurrent(entry) { nav.popBackStack() } },
+                    onOpenReport = { nav.ifCurrent(entry) { nav.navigate(ReportRoute(it)) } },
+                )
             }
-            composable<ReportRoute> { ReportScreen(onBack = { nav.popBackStack() }) }
+            composable<ReportRoute> { entry -> ReportScreen(onBack = { nav.ifCurrent(entry) { nav.popBackStack() } }) }
         }
     }
 }
