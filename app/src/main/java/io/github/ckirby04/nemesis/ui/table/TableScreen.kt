@@ -59,6 +59,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.ckirby04.nemesis.AppContainer
 import io.github.ckirby04.nemesis.data.Source
+import io.github.ckirby04.nemesis.engine.Positions
 import io.github.ckirby04.nemesis.engine.Villain
 import io.github.ckirby04.nemesis.parsing.Archetypes
 import io.github.ckirby04.nemesis.parsing.TableState
@@ -88,8 +89,10 @@ class TableViewModel(private val c: AppContainer, @Suppress("UNUSED_PARAMETER") 
             try {
                 val r = c.tables.applyNote(text)
                 val via = if (r.source == Source.CLAUDE) "Claude" else "offline"
+                val hero = c.tables.current().heroPos
                 _messages.send(
-                    if (r.seats.isEmpty()) "Couldn't tell which seat “${r.update.target}” means — try a position like CO or “my left”."
+                    if (r.seats.isEmpty() && Positions.canonical(r.update.target) == hero) "$hero is your seat — name an opponent's seat instead."
+                    else if (r.seats.isEmpty()) "Couldn't tell which seat “${r.update.target}” means — try a position like CO or “my left”."
                     else "Updated ${r.seats.joinToString(", ")} ($via)" + (r.update.archetype?.let { ": $it" } ?: ""),
                 )
             } finally {

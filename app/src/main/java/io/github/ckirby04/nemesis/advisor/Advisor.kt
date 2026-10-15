@@ -135,7 +135,7 @@ object Advisor {
 
     /** Offline follow-up: surface the single principle most relevant to the question. */
     fun offlineFollowup(question: String, grounding: List<Principle>): String {
-        val top = retriever.retrieve(question, 1).firstOrNull()?.principle ?: grounding.first()
+        val top = retriever.retrieve(question, 1).firstOrNull()?.takeIf { it.score > 0 }?.principle ?: grounding.first()
         val gist = top.text.split(". ").first().trimEnd('.') + "."
         return "Most relevant principle — **${top.title}**: $gist\n\n" +
             "*(Offline answer. Add an Anthropic API key in Settings for full conversational answers.)*"

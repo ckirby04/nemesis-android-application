@@ -60,7 +60,12 @@ object TableParser {
         position label instead. Keep deltas small and sane. Always include note.
     """.trimIndent()
 
-    private fun String.hasAny(vararg words: String) = words.any { it in this }
+    /**
+     * Keyword match anchored at a word start, so "nit" doesn't fire on "community" or "light" on
+     * "slightly" (Nemesis' plain substring test did); suffixes still count ("nits", "3-bets").
+     */
+    private fun String.hasAny(vararg words: String) =
+        words.any { Regex("""(?<![a-z0-9])""" + Regex.escape(it)).containsMatchIn(this) }
 
     /** Plain-English table description -> villain model (keyword heuristic). */
     fun parseDescription(text: String): Villain {
@@ -75,8 +80,9 @@ object TableParser {
         if (t.hasAny("aggressive", "3bet", "3-bet", "maniac"))
             v = v.copy(threebetPct = 0.08, bluffFreq = 0.25)
 
-        // open size: "raises to 20", "opens 6bb", "raise 4x" (the word cues the number)
-        Regex("""(?:raises?|opens?|to)\D{0,8}(\d+)""").find(t)?.let {
+        // Open size: "raises to 20", "opens 6bb", "raise light to 20", "raise 4x" (the word cues the number).
+        // Unlike Nemesis, a bare "to" doesn't count ("tend to call 3 streets"), nor does a 3-bet.
+        Regex("""\b(?:rais(?:es?|ing)|open(?:s|ing)?)\b\D{0,12}?(\d+)(?!\s*-?\s*bet)""").find(t)?.let {
             v = v.copy(openSizeBb = it.groupValues[1].toDouble())
         }
         // Stack depth: prefer an explicit 'deep'/'stack'/'effective' cue so the open size isn't
@@ -91,7 +97,7 @@ object TableParser {
                 .firstOrNull { it >= 40 && it != v.openSizeBb }
                 ?.let { v = v.copy(stackBb = it) }
         }
-        return v
+        return v.clamped()
     }
 
     /** In-session seat note -> [SeatUpdate] (keyword heuristic). */
@@ -101,8 +107,8 @@ object TableParser {
         val target = Positions.ALL.sortedByDescending { it.length }
             .firstOrNull { Regex("""(?<![\w+])${Regex.escape(it.lowercase())}(?![\w+])""").containsMatchIn(t) }
             ?: when {
-                t.hasAny("my left", "on my left", " left", "next to me") -> "left"
-                t.hasAny("my right", "on my right", " right") -> "right"
+                t.hasAny("left", "next to me") -> "left"
+                t.hasAny("right") -> "right"
                 else -> "all"
             }
         val archetype = (Archetypes.PRESETS.keys + Archetypes.ALIASES.keys)

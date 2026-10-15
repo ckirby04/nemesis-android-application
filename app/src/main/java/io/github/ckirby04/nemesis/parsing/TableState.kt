@@ -59,11 +59,11 @@ data class TableState(
     /** Per-seat models in the shape [io.github.ckirby04.nemesis.engine.Simulator.runStats] takes; null when every seat uses the default. */
     fun seatModels(): Map<String, Villain>? = seats.ifEmpty { null }
 
-    /** Position labels a target refers to: a label, left/right of hero, or the whole table. */
+    /** Opponents' position labels a target refers to: a label, left/right of hero, or the whole table. Never hero's own seat. */
     fun resolve(target: String): List<String> {
         val t = target.trim().lowercase()
         if (t in setOf("all", "table", "everyone", "everybody", "whole table")) return labels.filter { it != heroPos }
-        Positions.canonical(target.trim())?.let { return if (it in labels) listOf(it) else emptyList() }
+        Positions.canonical(target.trim())?.let { return if (it in labels && it != heroPos) listOf(it) else emptyList() }
         val i = labels.indexOf(heroPos).coerceAtLeast(0)
         return when (t) {
             "left", "my left", "next", "behind", "to my left" -> listOf(labels[(i + 1) % labels.size])

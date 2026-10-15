@@ -98,8 +98,13 @@ fun HistoryScreen(
     fun delete(id: Long) {
         vm.hide(id)
         scope.launch {
-            val r = snackbar.showSnackbar("Run deleted", actionLabel = "Undo", withDismissAction = true)
-            if (r == SnackbarResult.ActionPerformed) vm.undo(id) else vm.commitDelete(id)
+            var undone = false
+            try {
+                undone = snackbar.showSnackbar("Run deleted", actionLabel = "Undo", withDismissAction = true) == SnackbarResult.ActionPerformed
+            } finally {
+                // Also runs when leaving the screen cancels the snackbar: the delete still goes through.
+                if (undone) vm.undo(id) else vm.commitDelete(id)
+            }
         }
     }
 

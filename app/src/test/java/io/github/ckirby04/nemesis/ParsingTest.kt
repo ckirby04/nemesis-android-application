@@ -64,4 +64,31 @@ class ParsingTest {
         assertTrue(v.station >= 0.85)
         assertTrue(v.openRaisePct > Villain().openRaisePct)
     }
+
+    @Test fun resolve_neverTargetsHerosOwnSeat() {
+        val t = TableState(Villain(), heroPos = "BTN")
+        assertEquals(emptyList<String>(), t.resolve("BTN"))
+        val after = t.apply(TableParser.parseUpdate("BTN calls everything"))
+        assertTrue(after.seats.isEmpty())
+    }
+
+    @Test fun parseDescription_keywordsMatchWholeWords() {
+        // "community" contains "nit", "slightly" contains "light": neither should move the read.
+        val v = TableParser.parseDescription("Friendly community game, slightly passive")
+        assertEquals(Villain().openRaisePct, v.openRaisePct, 0.0)
+        assertEquals(Villain().callOpenPct, v.callOpenPct, 0.0)
+    }
+
+    @Test fun parseDescription_ignoresNumbersThatAreNotOpenSizes() {
+        assertEquals(4.0, TableParser.parseDescription("players tend to call 3 streets, 150bb deep").openSizeBb, 0.0)
+        assertEquals(4.0, TableParser.parseDescription("they open and 3-bet light").openSizeBb, 0.0)
+        assertEquals(6.0, TableParser.parseDescription("opens to 6bb").openSizeBb, 0.0)
+        assertEquals(15.0, TableParser.parseDescription("raise 15x").openSizeBb, 0.0)
+    }
+
+    @Test fun parseDescription_clampsToModelRanges() {
+        val v = TableParser.parseDescription("opens to 50, stacks 900")
+        assertEquals(30.0, v.openSizeBb, 0.0)
+        assertEquals(500.0, v.stackBb, 0.0)
+    }
 }

@@ -122,4 +122,12 @@ class DataLayerTest {
             assertEquals(KeySource.SAVED, it.keySource)
         }
     }
+
+    /** A pasted smart quote used to surface as "Couldn't read Claude's answer" (OkHttp rejects the header). */
+    @Test fun nonAsciiApiKey_fallsBackOfflineWithAClearReason() = runTest {
+        c.settings.setApiKey("sk-ant-\u201Cpasted\u201D")
+        val parsed = c.coach.parseDescription("loose and sticky")
+        assertEquals(Source.OFFLINE, parsed.source)
+        assertEquals("API key contains invalid characters", parsed.note)
+    }
 }

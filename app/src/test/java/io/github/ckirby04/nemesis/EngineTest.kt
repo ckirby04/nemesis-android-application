@@ -28,6 +28,16 @@ class EngineTest {
         assertEquals(1600, Evaluator.evaluate(cards("As", "Kh", "Qd", "Jc", "Ts"))) // best straight
     }
 
+    /** 3,000 random 5/6/7-card hands ranked by the real Python treys 0.1.8 (fixture in test/resources). */
+    @Test fun evaluator_matchesTreysOnRandomHands() {
+        val lines = javaClass.getResource("/treys_ranks.txt")!!.readText().lines().filter { it.isNotBlank() }
+        assertTrue(lines.size > 3000)
+        for (line in lines) {
+            val parts = line.split(" ")
+            assertEquals(line, parts.last().toInt(), Evaluator.evaluate(cards(*parts.dropLast(1).toTypedArray())))
+        }
+    }
+
     @Test fun evaluator_picksBestFiveOfSeven() {
         val quads = Evaluator.evaluate(cards("Ah", "Ad", "As", "Ac", "Kd", "2c", "3h"))
         assertEquals(11, quads) // AAAA-K is the best quads

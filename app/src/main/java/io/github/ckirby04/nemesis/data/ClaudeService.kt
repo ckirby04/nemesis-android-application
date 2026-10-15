@@ -2,6 +2,7 @@ package io.github.ckirby04.nemesis.data
 
 import com.anthropic.client.AnthropicClient
 import com.anthropic.client.okhttp.AnthropicOkHttpClient
+import com.anthropic.errors.AnthropicException
 import com.anthropic.errors.AnthropicIoException
 import com.anthropic.errors.AnthropicServiceException
 import com.anthropic.errors.NotFoundException
@@ -44,6 +45,8 @@ class ClaudeService(private val settings: SettingsRepository) {
     ): String = withContext(Dispatchers.IO) {
         val s = settings.current()
         if (!s.claudeEnabled) throw ClaudeUnavailable("No API key set")
+        // OkHttp rejects non-ASCII header values (e.g. a pasted smart quote) with an IllegalArgumentException.
+        if (s.apiKey.any { it.code !in 0x21..0x7e }) throw ClaudeUnavailable("API key contains invalid characters")
 
         val params = MessageCreateParams.builder()
             .model(s.model)
@@ -70,6 +73,8 @@ class ClaudeService(private val settings: SettingsRepository) {
             throw ClaudeUnavailable("Claude API error ${e.statusCode()}")
         } catch (e: AnthropicIoException) {
             throw ClaudeUnavailable("No connection to Claude")
+        } catch (e: AnthropicException) { // e.g. a response the SDK couldn't parse
+            throw ClaudeUnavailable("Couldn't reach Claude")
         }
 
         if (msg.stopReason().orElse(null) == StopReason.REFUSAL) throw ClaudeUnavailable("Claude declined this request")

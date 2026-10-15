@@ -30,6 +30,9 @@ import io.github.ckirby04.nemesis.data.Sourced
 import io.github.ckirby04.nemesis.engine.Cell
 import io.github.ckirby04.nemesis.engine.Rake
 import io.github.ckirby04.nemesis.engine.Villain
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -172,5 +175,29 @@ class AppFlowTest {
         compose.waitUntilExactlyOneExists(hasText("Key saved on this device only", substring = true))
         compose.onNodeWithText("Remove").performClick()
         compose.waitUntilExactlyOneExists(hasText("Offline mode"))
+    }
+
+    /** Leaving History while "Run deleted · Undo" is showing still deletes the run (it used to stay hidden but saved). */
+    @Test
+    fun history_swipeDeleteThenLeave_deletesTheRun() {
+        runBlocking {
+            app.container.runs.save(
+                description = "Run to swipe away",
+                villain = Sourced(Villain(), Source.OFFLINE),
+                positions = listOf("BTN"),
+                handsPerCell = 100,
+                seats = 9,
+                rake = Rake(),
+                results = mapOf("BTN" to mapOf("AA" to Cell(20.0, 1.0, 100))),
+                seatReads = emptyMap(),
+            )
+        }
+        tab("History")
+        compose.waitUntilExactlyOneExists(hasText("Run to swipe away"))
+        compose.onNodeWithText("Run to swipe away").performTouchInput { swipeLeft() }
+        awaitText("Run deleted")
+        tab("Analyze")
+        awaitText("Run simulation")
+        compose.waitUntil(5_000) { runBlocking { app.container.runs.summaries.first() }.isEmpty() }
     }
 }

@@ -96,7 +96,7 @@ class ReportViewModel(private val c: AppContainer, handle: SavedStateHandle) : V
         Advisor.profile(r.results, r.villain, r.advisorDescription, r.positions.first())
 
     fun generate() {
-        if (_generating.value) return
+        if (_generating.value || _asking.value != null) return
         viewModelScope.launch {
             val r = run.value ?: return@launch
             _generating.value = true
@@ -153,7 +153,7 @@ fun ReportScreen(onBack: () -> Unit, vm: ReportViewModel = viewModel(factory = a
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") } },
                 actions = {
                     if (report != null) {
-                        IconButton(onClick = vm::generate, enabled = !generating) { Icon(Icons.Outlined.Refresh, "Regenerate report") }
+                        IconButton(onClick = vm::generate, enabled = !generating && asking == null) { Icon(Icons.Outlined.Refresh, "Regenerate report") }
                         IconButton(onClick = {
                             val send = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
