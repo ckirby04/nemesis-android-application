@@ -7,6 +7,8 @@ import io.github.ckirby04.nemesis.engine.Cell
 import io.github.ckirby04.nemesis.engine.Villain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import io.github.ckirby04.nemesis.engine.Positions
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class AdvisorTest {
@@ -66,5 +68,35 @@ class AdvisorTest {
         val g = Advisor.followupGrounding("should I 3bet the maniac?", Advisor.retrieve(p))
         assertEquals(g.size, g.map { it.id }.toSet().size)
         assertTrue(g.size <= 6)
+    }
+
+    // ---- thresholds scale with the players left to act behind the reference seat ----
+
+    private fun classResults(pos: String, premiums: Double) =
+        mapOf(pos to Advisor.CLASSES.values.flatten().associateWith { Cell(if (it in Advisor.CLASSES.getValue("premiums")) premiums else 0.0, 0.5, 400) })
+
+    @Test fun evScale_isOneOnTheButton() {
+        assertEquals(1.0, Positions.evScale("BTN", 9), 1e-9)   // 2 behind: the blinds
+        assertEquals(2.0, Positions.evScale("UTG", 9), 1e-9)   // 8 behind
+        assertEquals(Math.sqrt(0.5), Positions.evScale("SB", 9), 1e-9)
+        assertEquals(Positions.evScale("SB", 9), Positions.evScale("SB", 2), 1e-9) // heads-up SB still has 1 behind
+    }
+
+    @Test fun premiumFlag_scalesWithPlayersBehind() {
+        val flag = "premium hands print heavily"
+        assertTrue(Advisor.profile(classResults("BTN", 7.0), Villain(), "d", nSeats = 9).flags.any { flag in it })
+        assertFalse(Advisor.profile(classResults("UTG", 7.0), Villain(), "d", nSeats = 9).flags.any { flag in it }) // UTG needs ~12
+    }
+
+    @Test fun cellVerdict_scalesWithPlayersBehind() {
+        assertEquals("PRINTS", Cell(5.0, 0.5, 400).verdict(Positions.evScale("BTN", 9)))
+        assertEquals("play", Cell(5.0, 0.5, 400).verdict(Positions.evScale("UTG", 9)))
+        assertEquals("FOLD", Cell(-4.0, 0.5, 400).verdict(Positions.evScale("BTN", 9)))
+        assertEquals("leak", Cell(-4.0, 0.5, 400).verdict(Positions.evScale("UTG", 9)))
+    }
+
+    @Test fun metrics_tellClaudeHowManyPlayersAreBehind() {
+        val p = Advisor.profile(classResults("CO", 5.0), Villain(), "d", nSeats = 9)
+        assertTrue("Players left to act behind CO: 3" in Advisor.metricsBlob(p))
     }
 }

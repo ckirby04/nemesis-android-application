@@ -2,6 +2,7 @@ package io.github.ckirby04.nemesis.advisor
 
 import io.github.ckirby04.nemesis.engine.Cell
 import io.github.ckirby04.nemesis.engine.Hands
+import io.github.ckirby04.nemesis.engine.Positions
 import io.github.ckirby04.nemesis.engine.Villain
 import kotlinx.serialization.Serializable
 import java.util.Locale
@@ -14,6 +15,9 @@ data class TableProfile(
     val flags: List<String>,
     val villain: Villain,
     val desc: String,
+    /** Players left to act behind [refPos], and the matching [Positions.evScale] the thresholds use. */
+    val behind: Int = 2,
+    val evScale: Double = 1.0,
 ) {
     /** Retrieval query: the description plus the sim's OUTPUT features, so the principles fit what the numbers say. */
     val query: String get() = "$desc. " + flags.joinToString(". ")
@@ -46,22 +50,35 @@ object Advisor {
         return if (vals.isEmpty()) Double.NaN else vals.average()
     }
 
-    fun profile(results: Map<String, Map<String, Cell>>, villain: Villain, desc: String, refPos: String? = null): TableProfile {
+    /**
+     * EV thresholds below are in BTN units (2 players behind) and scale with [Positions.evScale], since an
+     * open's EV grows with the players left to act: premiums vs the default pool average about +10bb
+     * from UTG but +2.4bb from the SB.
+     */
+    fun profile(
+        results: Map<String, Map<String, Cell>>,
+        villain: Villain,
+        desc: String,
+        refPos: String? = null,
+        nSeats: Int = 9,
+    ): TableProfile {
         val pos = refPos ?: results.keys.first()
         val evmap = results.getValue(pos)
         val ce = CLASSES.mapValues { (_, hs) -> avg(evmap, hs) }
+        val s = Positions.evScale(pos, nSeats)
 
         val flags = mutableListOf<String>()
         val sc = ce.getValue("suited_connectors")
         val sp = ce.getValue("small_pairs")
         flags += when {
-            sc > 1 -> "suited connectors are profitable to open in position"
-            sc < -0.5 -> "suited connectors are losing as opens; speculation is overpriced"
+            sc > 0.5 * s && pos == "SB" -> "suited connectors are profitable as steals from the small blind"
+            sc > 0.5 * s -> "suited connectors are profitable to open in position"
+            sc < -0.5 * s -> "suited connectors are losing as opens; speculation is overpriced"
             else -> "suited connectors are roughly break-even as opens"
         }
-        if (sp < -0.5) flags += "small pairs lose as opens at this depth (set-mining tax)"
-        else if (sp > 1) flags += "small pairs are profitable, helped by depth or sticky payoffs"
-        if (ce.getValue("premiums") > 15) flags += "premium hands print heavily; value gets paid"
+        if (sp < -0.5 * s) flags += "small pairs lose as opens at this depth (set-mining tax)"
+        else if (sp > 0.5 * s) flags += "small pairs are profitable, helped by depth or sticky payoffs"
+        if (ce.getValue("premiums") >= 6 * s) flags += "premium hands print heavily; value gets paid"
 
         if (villain.station >= 0.7) flags += "opponents are sticky calling stations who can't fold"
         if (villain.openRaisePct >= 0.28) flags += "the pool opens and raises light/wide"
@@ -71,7 +88,7 @@ object Advisor {
         else if (villain.stackBb >= 150) flags += "stacks are deep (${fmt0(villain.stackBb)}bb), improving implied odds"
         if (villain.bluffFreq >= 0.2) flags += "opponents bluff and raise aggressively"
 
-        return TableProfile(pos, ce, flags, villain, desc)
+        return TableProfile(pos, ce, flags, villain, desc, Positions.behind(pos, nSeats), s)
     }
 
     fun retrieve(profile: TableProfile, k: Int = 5): List<Principle> =
@@ -107,6 +124,7 @@ object Advisor {
 
     fun metricsBlob(p: TableProfile): String = buildList {
         add("Reference position: ${p.refPos}")
+        add("Players left to act behind ${p.refPos}: ${p.behind} (EV magnitudes grow with this, so compare classes rather than raw sizes across positions)")
         add("Per-class avg bb won per open:")
         for ((c, ev) in p.classEv) add("  - ${c.replace('_', ' ')}: ${fmtSigned(ev, 2)} bb")
         add("Observed table features: " + p.flags.joinToString("; "))
@@ -143,11 +161,12 @@ object Advisor {
 
     // ---------------------------------------------------------------- offline report
 
-    private fun verdict(x: Double) = when {
+    /** Class verdict; thresholds in BTN units times the reference seat's [TableProfile.evScale]. */
+    private fun verdict(x: Double, scale: Double) = when {
         x.isNaN() -> "not simulated"
-        x > 8 -> "a strong open"
-        x > 1 -> "profitable"
-        x > -1 -> "roughly break-even"
+        x >= 3.5 * scale -> "a strong open"
+        x >= 0.5 * scale -> "profitable"
+        x > -0.5 * scale -> "roughly break-even"
         else -> "a leak — fold these"
     }
 
@@ -168,13 +187,13 @@ object Advisor {
             "not bluffs, and your range discipline preflop matters more than fancy play.\n"
 
         out += "## What the numbers say"
-        out += "- Premiums: **${fmtSigned(ev("premiums"))} bb/open** — ${verdict(ev("premiums"))}. Value gets paid; bet them relentlessly."
-        out += "- Broadways: **${fmtSigned(ev("broadways"))} bb/open** — ${verdict(ev("broadways"))}."
-        out += "- Medium pairs (99-77): **${fmtSigned(ev("medium_pairs"))} bb/open** — ${verdict(ev("medium_pairs"))}."
-        out += "- Suited connectors: **${fmtSigned(ev("suited_connectors"))} bb/open** — ${verdict(ev("suited_connectors"))}."
-        out += "- Small pairs (55-22): **${fmtSigned(ev("small_pairs"))} bb/open** — ${verdict(ev("small_pairs"))} " +
+        out += "- Premiums: **${fmtSigned(ev("premiums"))} bb/open** — ${verdict(ev("premiums"), p.evScale)}. Value gets paid; bet them relentlessly."
+        out += "- Broadways: **${fmtSigned(ev("broadways"))} bb/open** — ${verdict(ev("broadways"), p.evScale)}."
+        out += "- Medium pairs (99-77): **${fmtSigned(ev("medium_pairs"))} bb/open** — ${verdict(ev("medium_pairs"), p.evScale)}."
+        out += "- Suited connectors: **${fmtSigned(ev("suited_connectors"))} bb/open** — ${verdict(ev("suited_connectors"), p.evScale)}."
+        out += "- Small pairs (55-22): **${fmtSigned(ev("small_pairs"))} bb/open** — ${verdict(ev("small_pairs"), p.evScale)} " +
             "(set-mining tax at this depth/price)."
-        out += "- Suited aces: **${fmtSigned(ev("suited_aces"))} bb/open** — ${verdict(ev("suited_aces"))}."
+        out += "- Suited aces: **${fmtSigned(ev("suited_aces"))} bb/open** — ${verdict(ev("suited_aces"), p.evScale)}."
         out += "- Offsuit junk/trash: **${fmtSigned(ev("trash"))} bb/open** — clear folds.\n"
 
         out += "## How to play it"

@@ -1,6 +1,7 @@
 package io.github.ckirby04.nemesis.engine
 
 import kotlinx.serialization.Serializable
+import kotlin.math.sqrt
 
 /** A parameterised opponent pool. Ranges are "top X% of hands". */
 @Serializable
@@ -64,14 +65,17 @@ data class Cell(val mean: Double, val se: Double, val n: Int) {
     val halfCi: Double get() = 1.96 * se
     val crossesZero: Boolean get() = ciLow <= 0.0 && 0.0 <= ciHigh
 
-    val verdict: String
-        get() = when {
-            mean >= 8 -> "PRINTS"
-            mean >= 1 -> "play"
-            mean > -1 -> "marginal"
-            mean > -6 -> "leak"
-            else -> "FOLD"
-        }
+    /**
+     * Verdict for an open from a seat whose EV scale is [scale] ([Positions.evScale]). Thresholds are
+     * in BTN units, so a +5bb open "PRINTS" on the button but is just "play" from UTG.
+     */
+    fun verdict(scale: Double = 1.0): String = when {
+        mean >= 3.5 * scale -> "PRINTS"
+        mean >= 0.5 * scale -> "play"
+        mean > -0.5 * scale -> "marginal"
+        mean > -3.0 * scale -> "leak"
+        else -> "FOLD"
+    }
 }
 
 object Positions {
@@ -83,6 +87,20 @@ object Positions {
      * button and blinds always exist (6-max = LJ HJ CO BTN SB BB; heads-up = SB BB).
      */
     fun forSeats(nSeats: Int): List<String> = ALL.takeLast(nSeats.coerceIn(2, 9))
+
+    /** Players left to act behind an opener at [pos] (BTN = 2, the blinds; SB = 1). */
+    fun behind(pos: String, nSeats: Int): Int {
+        val labels = forSeats(nSeats)
+        val i = labels.indexOf(pos)
+        return if (i < 0) 0 else labels.size - 1 - i
+    }
+
+    /**
+     * How big EV numbers get from [pos]: an open's EV grows roughly with sqrt(players behind)
+     * (measured across loose, nitty, aggressive, sticky and default pools). 1.0 on the BTN, 2.0 at
+     * UTG 9-handed, 0.71 in the SB. Verdict and advisor thresholds are in BTN units times this.
+     */
+    fun evScale(pos: String, nSeats: Int): Double = sqrt(behind(pos, nSeats).coerceAtLeast(1) / 2.0)
 
     /** Canonical label for user/LLM spellings: "utg1", "UTG +1", "btn" -> "UTG+1", "BTN". Null if unknown. */
     fun canonical(label: String): String? {

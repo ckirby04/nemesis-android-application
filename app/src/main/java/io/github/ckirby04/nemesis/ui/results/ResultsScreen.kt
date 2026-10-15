@@ -54,6 +54,7 @@ import androidx.navigation.toRoute
 import io.github.ckirby04.nemesis.AppContainer
 import io.github.ckirby04.nemesis.data.SavedRun
 import io.github.ckirby04.nemesis.engine.Cell
+import io.github.ckirby04.nemesis.engine.Positions
 import io.github.ckirby04.nemesis.ui.ResultsRoute
 import io.github.ckirby04.nemesis.ui.components.HeatmapLegend
 import io.github.ckirby04.nemesis.ui.components.RangeHeatmap
@@ -118,6 +119,7 @@ private fun ResultsContent(run: SavedRun, padding: PaddingValues) {
     var rankView by rememberSaveable { mutableStateOf(RankView.BEST) }
     val cells = run.results[pos].orEmpty()
     val bound = remember(cells) { evScaleBound(cells.values) }
+    val scale = Positions.evScale(pos, run.seats)
     val ranked = remember(cells, rankView) {
         val sorted = cells.entries.sortedByDescending { it.value.mean }
         when (rankView) {
@@ -201,7 +203,7 @@ private fun ResultsContent(run: SavedRun, padding: PaddingValues) {
                 } else if (cell == null) {
                     Text("$hand wasn't simulated in this run.", style = MaterialTheme.typography.bodyMedium)
                 } else {
-                    CellDetail(hand, cell, bound)
+                    CellDetail(hand, cell, bound, scale)
                 }
             }
         }
@@ -215,7 +217,7 @@ private fun ResultsContent(run: SavedRun, padding: PaddingValues) {
                     Text("Nothing in this bucket.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 ranked.forEachIndexed { i, (h, c) ->
-                    RankRow(i + 1, h, c, bound, onClick = { selected = h })
+                    RankRow(i + 1, h, c, bound, scale, onClick = { selected = h })
                 }
             }
         }
@@ -233,7 +235,7 @@ private fun ResultsContent(run: SavedRun, padding: PaddingValues) {
 private fun signed(x: Double, d: Int = 1) = String.format(Locale.US, "%+.${d}f", x)
 
 @Composable
-private fun CellDetail(hand: String, cell: Cell, bound: Double) {
+private fun CellDetail(hand: String, cell: Cell, bound: Double, scale: Double) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         val swatch = evColor(cell.mean, bound)
         Surface(shape = RoundedCornerShape(12.dp), color = swatch, modifier = Modifier.size(56.dp)) {
@@ -249,7 +251,7 @@ private fun CellDetail(hand: String, cell: Cell, bound: Double) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text("Verdict: ${cell.verdict}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text("Verdict: ${cell.verdict(scale)}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
     }
     if (cell.crossesZero) {
@@ -265,14 +267,14 @@ private fun CellDetail(hand: String, cell: Cell, bound: Double) {
 }
 
 @Composable
-private fun RankRow(rank: Int, hand: String, cell: Cell, bound: Double, onClick: () -> Unit) {
+private fun RankRow(rank: Int, hand: String, cell: Cell, bound: Double, scale: Double, onClick: () -> Unit) {
     Surface(onClick = onClick, shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("$rank", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(28.dp))
             Surface(shape = RoundedCornerShape(6.dp), color = evColor(cell.mean, bound), modifier = Modifier.size(width = 6.dp, height = 22.dp)) {}
             Spacer(Modifier.width(10.dp))
             Text(hand, style = MaterialTheme.typography.titleSmall, modifier = Modifier.width(52.dp))
-            Text(cell.verdict, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            Text(cell.verdict(scale), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
             Column(horizontalAlignment = Alignment.End) {
                 Text("${signed(cell.mean)} bb", style = MaterialTheme.typography.labelLarge)
                 Text("± ${String.format(Locale.US, "%.1f", cell.halfCi)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

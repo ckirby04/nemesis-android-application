@@ -93,7 +93,7 @@ class ReportViewModel(private val c: AppContainer, handle: SavedStateHandle) : V
     }
 
     private fun profileOf(r: SavedRun): TableProfile =
-        Advisor.profile(r.results, r.villain, r.advisorDescription, r.positions.first())
+        Advisor.profile(r.results, r.villain, r.advisorDescription, r.positions.first(), r.seats)
 
     fun generate() {
         if (_generating.value || _asking.value != null) return
