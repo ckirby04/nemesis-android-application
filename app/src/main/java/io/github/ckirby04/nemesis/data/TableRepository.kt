@@ -36,8 +36,9 @@ class TableRepository(private val store: DataStore<Preferences>, private val coa
     }
 
     suspend fun applyNote(text: String): NoteResult {
-        val parsed = coach.parseUpdate(text)
-        val seats = current().resolve(parsed.value.target)
+        val table = current()
+        val parsed = coach.parseUpdate(text, table)
+        val seats = table.resolve(parsed.value.target)
         if (seats.isNotEmpty()) edit { it.apply(parsed.value) }
         return NoteResult(parsed.value, seats, parsed.source, parsed.note)
     }

@@ -7,6 +7,7 @@ import io.github.ckirby04.nemesis.advisor.TableProfile
 import io.github.ckirby04.nemesis.engine.Villain
 import io.github.ckirby04.nemesis.parsing.SeatUpdate
 import io.github.ckirby04.nemesis.parsing.TableParser
+import io.github.ckirby04.nemesis.parsing.TableState
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -46,8 +47,13 @@ class CoachRepository(private val claude: ClaudeService) {
         json.decodeFromString<Villain>(jsonObject(raw)).clamped()
     }
 
-    suspend fun parseUpdate(text: String): Sourced<SeatUpdate> = withFallback({ TableParser.parseUpdate(text) }) {
-        val raw = claude.complete(TableParser.UPDATE_SYSTEM, text, maxTokens = 4_000, effort = OutputConfig.Effort.LOW)
+    /** [table] lets Claude turn "two seats to my right" into an exact seat; the offline parser ignores it. */
+    suspend fun parseUpdate(text: String, table: TableState? = null): Sourced<SeatUpdate> = withFallback({ TableParser.parseUpdate(text) }) {
+        val context = table?.let {
+            "TABLE: hero sits ${it.heroPos}; seats in clockwise action order (left of a seat = the next one): " +
+                it.labels.joinToString(", ") + "\n\nNOTE: "
+        }.orEmpty()
+        val raw = claude.complete(TableParser.UPDATE_SYSTEM, context + text, maxTokens = 4_000, effort = OutputConfig.Effort.LOW)
         json.decodeFromString<SeatUpdate>(jsonObject(raw)).let { it.copy(note = it.note.ifBlank { text.trim().take(80) }) }
     }
 

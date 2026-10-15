@@ -55,7 +55,9 @@ object TableParser {
         "bluffs rivers/turns" => bluffFreq +0.2. "calls everything"/"can't fold"/"sticky" => station +0.25 and
         callOpenPct +0.15. "folds a lot"/"nitty" => station -0.2, callOpenPct -0.1. "raises light"/"opens wide" =>
         openRaisePct +0.12, callOpenPct +0.1. "3bets a lot" => threebetPct +0.05. Relative references like
-        "the guy on my left" => "left". Keep deltas small and sane. Always include note.
+        "the guy on my left" => "left". When a TABLE line gives the hero's seat and the seat order, resolve
+        any relative reference ("two seats to my right", "the player after the button") to the exact
+        position label instead. Keep deltas small and sane. Always include note.
     """.trimIndent()
 
     private fun String.hasAny(vararg words: String) = words.any { it in this }
