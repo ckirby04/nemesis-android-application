@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PokerApp"
+rootProject.name = "Nemesis"
 include(":app")

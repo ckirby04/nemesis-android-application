@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar icon: the launcher spade as a white silhouette. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2.5C14,5.2 19.5,8.4 19.5,12.6 C19.5,15.3 17.5,16.9 15.2,16.9 C13.8,16.9 12.9,16.2 12.4,15.4 C12.6,17.3 13.3,18.7 14.5,20 L9.5,20 C10.7,18.7 11.4,17.3 11.6,15.4 C11.1,16.2 10.2,16.9 8.8,16.9 C6.5,16.9 4.5,15.3 4.5,12.6 C4.5,8.4 10,5.2 12,2.5 Z" />
+</vector>
