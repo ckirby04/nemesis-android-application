@@ -9,6 +9,20 @@ hands make money against it, position by position, on a 13×13 heatmap.
 It is **not a GTO solver**: villains play the fixed strategy you describe, and hero plays a defined open-and-value-bet
 line. Results are directional, not exact bb/100 — a study tool for between sessions.
 
+## Download
+
+Grab the APK from the [latest release](https://github.com/ckirby04/nemesis-android-application/releases/latest)
+and open it on an Android 11+ phone or emulator (allow installs from unknown sources when prompted), or drag it onto
+a running emulator. No API key is needed — everything works offline.
+
+## Screenshots
+
+| Describe the table | Heatmap of opening EV | Tap a hand for its EV |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/analyze.png" width="240" alt="Analyze screen"> | <img src="docs/screenshots/results.png" width="240" alt="Results screen"> | <img src="docs/screenshots/heatmap.png" width="240" alt="Heatmap with a selected hand"> |
+| **Advisor report** | **Per-seat reads** | **Saved runs** |
+| <img src="docs/screenshots/report.png" width="240" alt="Advisor report"> | <img src="docs/screenshots/table.png" width="240" alt="Live table"> | <img src="docs/screenshots/history.png" width="240" alt="History"> |
+
 ## Features
 
 - **Analyze** — plain-English table description → villain model → full 169-hand simulation per position, with live
@@ -74,5 +88,6 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
   in-memory database and throwaway settings via a custom test runner, so tests never touch real app data.
 
 GitHub Actions runs both suites on every push (instrumented tests on an API 35 emulator) and uploads the release APK
-as a build artifact. The release build is signed with the debug key so it installs anywhere for grading; use a real
-keystore before publishing to a store.
+as a build artifact; tagged versions are published on the [Releases](https://github.com/ckirby04/nemesis-android-application/releases)
+page. The release build is signed with the debug key so it installs anywhere for grading; use a real keystore before
+publishing to a store.
