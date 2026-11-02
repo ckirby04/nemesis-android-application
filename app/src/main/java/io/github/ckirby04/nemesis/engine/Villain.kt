@@ -1,7 +1,7 @@
 package io.github.ckirby04.nemesis.engine
 
 import kotlinx.serialization.Serializable
-import kotlin.math.sqrt
+import kotlin.math.pow
 
 /** A parameterised opponent pool. Ranges are "top X% of hands". */
 @Serializable
@@ -95,12 +95,21 @@ object Positions {
         return if (i < 0) 0 else labels.size - 1 - i
     }
 
+    /** The small blind's EV relative to the button: it plays out of position against the BB. */
+    private const val SB_EV_SCALE = 0.6
+
     /**
-     * How big EV numbers get from [pos]: an open's EV grows roughly with sqrt(players behind)
-     * (measured across loose, nitty, aggressive, sticky and default pools). 1.0 on the BTN, 2.0 at
-     * UTG 9-handed, 0.71 in the SB. Verdict and advisor thresholds are in BTN units times this.
+     * How big EV numbers get from [pos], relative to the button, as an open's EV grows with the players left
+     * to act. Measured across loose, nitty, aggressive, sticky and default pools at 3000 sims per hand from
+     * every opening seat: most hands grow with sqrt(players behind / 2), but [premium] hands grow faster,
+     * with (players behind / 2)^0.7, since more players behind means more callers paying off the best hands.
+     * The small blind earns about 0.6 of the button either way. 1.0 on the BTN; 2.0 at UTG 9-handed
+     * (2.64 for premiums). Verdict and advisor thresholds are in BTN units times this.
      */
-    fun evScale(pos: String, nSeats: Int): Double = sqrt(behind(pos, nSeats).coerceAtLeast(1) / 2.0)
+    fun evScale(pos: String, nSeats: Int, premium: Boolean = false): Double {
+        val behind = behind(pos, nSeats)
+        return if (behind <= 1) SB_EV_SCALE else (behind / 2.0).pow(if (premium) 0.7 else 0.5)
+    }
 
     /** Canonical label for user/LLM spellings: "utg1", "UTG +1", "btn" -> "UTG+1", "BTN". Null if unknown. */
     fun canonical(label: String): String? {

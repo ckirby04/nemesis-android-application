@@ -78,14 +78,24 @@ class AdvisorTest {
     @Test fun evScale_isOneOnTheButton() {
         assertEquals(1.0, Positions.evScale("BTN", 9), 1e-9)   // 2 behind: the blinds
         assertEquals(2.0, Positions.evScale("UTG", 9), 1e-9)   // 8 behind
-        assertEquals(Math.sqrt(0.5), Positions.evScale("SB", 9), 1e-9)
+        assertEquals(0.6, Positions.evScale("SB", 9), 1e-9)     // out of position vs the BB
         assertEquals(Positions.evScale("SB", 9), Positions.evScale("SB", 2), 1e-9) // heads-up SB still has 1 behind
     }
 
     @Test fun premiumFlag_scalesWithPlayersBehind() {
         val flag = "premium hands print heavily"
         assertTrue(Advisor.profile(classResults("BTN", 7.0), Villain(), "d", nSeats = 9).flags.any { flag in it })
-        assertFalse(Advisor.profile(classResults("UTG", 7.0), Villain(), "d", nSeats = 9).flags.any { flag in it }) // UTG needs ~12
+        assertFalse(Advisor.profile(classResults("UTG", 7.0), Villain(), "d", nSeats = 9).flags.any { flag in it }) // UTG needs ~16
+        // Premiums scale steeper than other hands: +14 from UTG is only ~5.3 in button terms.
+        assertFalse(Advisor.profile(classResults("UTG", 14.0), Villain(), "d", nSeats = 9).flags.any { flag in it })
+        assertTrue(Advisor.profile(classResults("UTG", 16.0), Villain(), "d", nSeats = 9).flags.any { flag in it })
+    }
+
+    @Test fun premiumScale_isSteeperFromEarlySeats() {
+        assertEquals(1.0, Positions.evScale("BTN", 9, premium = true), 1e-9)
+        assertEquals(Math.pow(4.0, 0.7), Positions.evScale("UTG", 9, premium = true), 1e-9)
+        assertTrue(Positions.evScale("CO", 9, premium = true) > Positions.evScale("CO", 9))
+        assertEquals(Positions.evScale("SB", 9), Positions.evScale("SB", 9, premium = true), 1e-9)
     }
 
     @Test fun cellVerdict_scalesWithPlayersBehind() {

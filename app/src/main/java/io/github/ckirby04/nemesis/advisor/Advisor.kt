@@ -15,9 +15,10 @@ data class TableProfile(
     val flags: List<String>,
     val villain: Villain,
     val desc: String,
-    /** Players left to act behind [refPos], and the matching [Positions.evScale] the thresholds use. */
+    /** Players left to act behind [refPos], and the matching [Positions.evScale]s the thresholds use. */
     val behind: Int = 2,
     val evScale: Double = 1.0,
+    val premiumEvScale: Double = 1.0,
     /** Every other simulated seat, in run order, so the report covers the whole run and not just [refPos]. */
     val otherSeats: List<SeatEv> = emptyList(),
 ) {
@@ -25,9 +26,9 @@ data class TableProfile(
     val query: String get() = "$desc. " + flags.joinToString(". ")
 }
 
-/** One seat's per-class EV, with its players behind and [Positions.evScale]. */
+/** One seat's per-class EV, with its players behind and [Positions.evScale]s. */
 @Serializable
-data class SeatEv(val pos: String, val classEv: Map<String, Double>, val behind: Int, val evScale: Double)
+data class SeatEv(val pos: String, val classEv: Map<String, Double>, val behind: Int, val evScale: Double, val premiumEvScale: Double)
 
 /**
  * RAG advisor, ported from Nemesis' `advisor.py`:
@@ -58,8 +59,8 @@ object Advisor {
 
     /**
      * EV thresholds below are in BTN units (2 players behind) and scale with [Positions.evScale], since an
-     * open's EV grows with the players left to act: premiums vs the default pool average about +10bb
-     * from UTG but +2.4bb from the SB.
+     * open's EV grows with the players left to act: premiums vs the default pool average about +10.6bb
+     * from UTG, +3.9bb on the button and +2.4bb from the SB.
      */
     fun profile(
         results: Map<String, Map<String, Cell>>,
@@ -73,8 +74,9 @@ object Advisor {
         fun classEv(evmap: Map<String, Cell>) = CLASSES.mapValues { (_, hs) -> avg(evmap, hs) }
         val ce = classEv(evmap)
         val s = Positions.evScale(pos, nSeats)
+        val ps = Positions.evScale(pos, nSeats, premium = true)
         val others = results.filterKeys { it != pos }.map { (p, cells) ->
-            SeatEv(p, classEv(cells), Positions.behind(p, nSeats), Positions.evScale(p, nSeats))
+            SeatEv(p, classEv(cells), Positions.behind(p, nSeats), Positions.evScale(p, nSeats), Positions.evScale(p, nSeats, premium = true))
         }
 
         val flags = mutableListOf<String>()
@@ -88,7 +90,7 @@ object Advisor {
         }
         if (sp < -0.5 * s) flags += "small pairs lose as opens at this depth (set-mining tax)"
         else if (sp > 0.5 * s) flags += "small pairs are profitable, helped by depth or sticky payoffs"
-        if (ce.getValue("premiums") >= 6 * s) flags += "premium hands print heavily; value gets paid"
+        if (ce.getValue("premiums") >= 6 * ps) flags += "premium hands print heavily; value gets paid"
 
         if (villain.station >= 0.7) flags += "opponents are sticky calling stations who can't fold"
         if (villain.openRaisePct >= 0.28) flags += "the pool opens and raises light/wide"
@@ -98,7 +100,7 @@ object Advisor {
         else if (villain.stackBb >= 150) flags += "stacks are deep (${fmt0(villain.stackBb)}bb), improving implied odds"
         if (villain.bluffFreq >= 0.2) flags += "opponents bluff and raise aggressively"
 
-        return TableProfile(pos, ce, flags, villain, desc, Positions.behind(pos, nSeats), s, others)
+        return TableProfile(pos, ce, flags, villain, desc, Positions.behind(pos, nSeats), s, ps, others)
     }
 
     fun retrieve(profile: TableProfile, k: Int = 5): List<Principle> =
@@ -178,7 +180,7 @@ object Advisor {
 
     // ---------------------------------------------------------------- offline report
 
-    /** Class verdict; thresholds in BTN units times the reference seat's [TableProfile.evScale]. */
+    /** Class verdict; thresholds in BTN units times the seat's [Positions.evScale] for that class. */
     private fun verdict(x: Double, scale: Double) = when {
         x.isNaN() -> "not simulated"
         x >= 3.5 * scale -> "a strong open"
@@ -204,8 +206,8 @@ object Advisor {
             "not bluffs, and your range discipline preflop matters more than fancy play.\n"
 
         out += "## What the numbers say"
-        out += "- Premiums: **${fmtSigned(ev("premiums"))} bb/open** — ${verdict(ev("premiums"), p.evScale)}." +
-            if (ev("premiums") >= 0.5 * p.evScale) " Value gets paid; bet them relentlessly." else ""
+        out += "- Premiums: **${fmtSigned(ev("premiums"))} bb/open** — ${verdict(ev("premiums"), p.premiumEvScale)}." +
+            if (ev("premiums") >= 0.5 * p.premiumEvScale) " Value gets paid; bet them relentlessly." else ""
         out += "- Broadways: **${fmtSigned(ev("broadways"))} bb/open** — ${verdict(ev("broadways"), p.evScale)}."
         out += "- Medium pairs (99-77): **${fmtSigned(ev("medium_pairs"))} bb/open** — ${verdict(ev("medium_pairs"), p.evScale)}."
         out += "- Suited connectors: **${fmtSigned(ev("suited_connectors"))} bb/open** — ${verdict(ev("suited_connectors"), p.evScale)}."
@@ -219,7 +221,7 @@ object Advisor {
             out += "## Other positions"
             for (o in p.otherSeats) {
                 val byVerdict = CLASSES.keys.filter { !o.classEv.getValue(it).isNaN() }
-                    .groupBy { verdict(o.classEv.getValue(it), o.evScale) }
+                    .groupBy { verdict(o.classEv.getValue(it), if (it == "premiums") o.premiumEvScale else o.evScale) }
                 out += "- **${o.pos}**: " + byVerdict.entries.joinToString("; ") { (v, cs) -> "$v — " + cs.joinToString(", ") { it.replace('_', ' ') } }
             }
             out += ""

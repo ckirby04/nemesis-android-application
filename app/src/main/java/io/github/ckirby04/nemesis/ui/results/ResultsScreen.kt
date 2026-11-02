@@ -52,6 +52,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.toRoute
 import io.github.ckirby04.nemesis.AppContainer
+import io.github.ckirby04.nemesis.advisor.Advisor
 import io.github.ckirby04.nemesis.data.SavedRun
 import io.github.ckirby04.nemesis.engine.Cell
 import io.github.ckirby04.nemesis.engine.Positions
@@ -119,7 +120,8 @@ private fun ResultsContent(run: SavedRun, padding: PaddingValues) {
     var rankView by rememberSaveable { mutableStateOf(RankView.BEST) }
     val cells = run.results[pos].orEmpty()
     val bound = remember(cells) { evScaleBound(cells.values) }
-    val scale = Positions.evScale(pos, run.seats)
+    // Premiums' EV grows faster with the players behind than other hands', so they get their own scale.
+    fun scale(hand: String) = Positions.evScale(pos, run.seats, premium = hand in Advisor.CLASSES.getValue("premiums"))
     val ranked = remember(cells, rankView) {
         val sorted = cells.entries.sortedByDescending { it.value.mean }
         when (rankView) {
@@ -205,7 +207,7 @@ private fun ResultsContent(run: SavedRun, padding: PaddingValues) {
                 } else if (cell == null) {
                     Text("$hand wasn't simulated in this run.", style = MaterialTheme.typography.bodyMedium)
                 } else {
-                    CellDetail(hand, cell, bound, scale)
+                    CellDetail(hand, cell, bound, scale(hand))
                 }
             }
         }
@@ -219,7 +221,7 @@ private fun ResultsContent(run: SavedRun, padding: PaddingValues) {
                     Text("Nothing in this bucket.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 ranked.forEachIndexed { i, (h, c) ->
-                    RankRow(i + 1, h, c, bound, scale, onClick = { selected = h })
+                    RankRow(i + 1, h, c, bound, scale(h), onClick = { selected = h })
                 }
             }
         }
