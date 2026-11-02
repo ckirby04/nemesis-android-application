@@ -99,4 +99,29 @@ class AdvisorTest {
         val p = Advisor.profile(classResults("CO", 5.0), Villain(), "d", nSeats = 9)
         assertTrue("Players left to act behind CO: 3" in Advisor.metricsBlob(p))
     }
+
+    // ---- the offline report follows the numbers and covers every simulated seat ----
+
+    @Test fun offlineReport_trashVerdictFollowsTheData() {
+        val p = Advisor.profile(fakeResults { 2.0 }, Villain(), "d")
+        val report = Advisor.offlineReport(p, Advisor.retrieve(p))
+        assertFalse("clear folds" in report)
+        assertTrue("Offsuit marginal (A9o-T9o): **+2.0 bb/open** — profitable" in report)
+        assertTrue("Offsuit trash: **+2.0 bb/open** — profitable" in report)
+    }
+
+    @Test fun offlineReport_limperTipOnlyWhenRetrieved() {
+        val p = Advisor.profile(fakeResults { 1.0 }, Villain(), "d")
+        val limpers = KnowledgeBase.PRINCIPLES.filter { it.id == "isolation-limpers" }
+        assertFalse("Isolate weak limpers" in Advisor.offlineReport(p, KnowledgeBase.PRINCIPLES.take(2)))
+        assertTrue("Isolate weak limpers" in Advisor.offlineReport(p, limpers))
+    }
+
+    @Test fun profile_coversEveryPositionInTheRun() {
+        val results = classResults("BTN", 5.0) + classResults("UTG", -1.0)
+        val p = Advisor.profile(results, Villain(), "d", refPos = "BTN", nSeats = 9)
+        assertEquals(listOf("UTG"), p.otherSeats.map { it.pos })
+        assertTrue("  - UTG (8 behind): premiums -1.00" in Advisor.metricsBlob(p))
+        assertTrue("## Other positions\n- **UTG**:" in Advisor.offlineReport(p, Advisor.retrieve(p)))
+    }
 }

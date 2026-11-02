@@ -57,6 +57,20 @@ class ParsingTest {
         assertTrue(u.deltas.getValue("bluffFreq") > 0)
     }
 
+    @Test fun parseUpdate_archetypeWordsAreNotAlsoDeltas() {
+        val station = TableParser.parseUpdate("the CO is a calling station")
+        assertEquals("station", station.archetype)
+        assertTrue(station.deltas.isEmpty())
+
+        val tag = TableParser.parseUpdate("BTN is tight aggressive")
+        assertEquals("tag", tag.archetype)
+        assertTrue(tag.deltas.isEmpty())
+
+        val nit = TableParser.parseUpdate("UTG is a nit who bluffs rivers")
+        assertEquals("nit", nit.archetype)
+        assertEquals(setOf("bluffFreq"), nit.deltas.keys)
+    }
+
     @Test fun parseDescription_separatesOpenSizeFromStack() {
         val v = TableParser.parseDescription("loose, raises 20bb light, sticky stations, 100bb deep")
         assertEquals(20.0, v.openSizeBb, 0.0)

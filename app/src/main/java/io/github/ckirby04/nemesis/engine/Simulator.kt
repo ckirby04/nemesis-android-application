@@ -21,8 +21,9 @@ import kotlin.random.Random
  * The postflop model matches `engine.py`; preflop is more realistic than the original:
  * only the seats behind hero act (earlier seats folded), blinds count toward their raises
  * and calls, results are measured against folding (a posted blind is sunk), players facing
- * a 3-bet cold continue only with their 3-bet range, flatters fold to a 3-bet, and the BB
- * can't open (it acts last).
+ * a 3-bet cold continue only with their 3-bet range, flatters fold to a 3-bet, the BB
+ * can't open (it acts last), and villains are dealt real cards, so hand classes appear at
+ * their combo frequencies.
  */
 object Simulator {
     // Postflop decision thresholds (made-strength fractions). ASSUMPTION: coarse by design.
@@ -76,25 +77,29 @@ object Simulator {
         val coldCallers = ArrayList<Pair<IntArray, Villain>>()
         for (seat in labels.subList(heroIdx + 1, labels.size)) {
             val m = seatModels?.get(seat) ?: v
-            val vc = Hands.toCombo(Hands.ALL_169.random(rng), dead, rng) ?: continue
-            val vClass = Hands.classOf(vc[0], vc[1])
+            // Deal two real cards, so hand classes come up at their true combo frequencies (Nemesis drew a
+            // class uniformly from the 169, which dealt suited hands twice as often as a deck does). Folded
+            // cards are gone from the deck too.
+            val c1 = dealCard(dead, rng)
+            dead = dead or Cards.bit(c1)
+            val c2 = dealCard(dead, rng)
+            dead = dead or Cards.bit(c2)
+            val vc = intArrayOf(c1, c2)
+            val vClass = Hands.classOf(c1, c2)
             val blind = blindOf(seat)
             if (threebet == null) {
                 if (m.will3bet(vClass) && rng.nextDouble() < 0.8) {
                     threebet = vc to m
-                    dead = dead or Cards.bit(vc[0]) or Cards.bit(vc[1])
                     curBet = openSize * 3
                     pot += curBet - blind
                 } else if (m.will3bet(vClass) || m.willCallOpen(vClass)) {
                     // A 3-bet hand that doesn't 3-bet (the other 20%) flats rather than folding.
                     callers += vc to m
-                    dead = dead or Cards.bit(vc[0]) or Cards.bit(vc[1])
                     pot += openSize - blind
                 }
             } else if (m.will3bet(vClass)) {
                 // ASSUMPTION: facing a 3-bet cold, a player continues only with its own 3-bet range (and calls).
                 coldCallers += vc to m
-                dead = dead or Cards.bit(vc[0]) or Cards.bit(vc[1])
                 pot += curBet - blind
             }
         }
@@ -192,6 +197,14 @@ object Simulator {
     }
 
     private fun blindOf(pos: String) = when (pos) { "SB" -> 0.5; "BB" -> 1.0; else -> 0.0 }
+
+    /** A uniformly random card not in [dead]; rejection sampling is cheap with at most ~20 cards out. */
+    private fun dealCard(dead: Long, rng: Random): Int {
+        while (true) {
+            val c = rng.nextInt(52)
+            if (dead and Cards.bit(c) == 0L) return c
+        }
+    }
 
     private fun dealBoard(dead: Long, rng: Random): IntArray {
         val deck = IntArray(52 - java.lang.Long.bitCount(dead))

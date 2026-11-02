@@ -1,9 +1,13 @@
 package io.github.ckirby04.nemesis.engine
 
 /**
- * Preflop percentile strength (0 = worst, 1 = best) of each 169-class, ported from
- * Nemesis' shipped high-sample `data/hand_ranking.json`. The table is purely an
- * ordering, so it is stored as the 169 hands from weakest to strongest.
+ * Preflop percentile strength (0 = worst, 1 = best) of each 169-class. The ordering is ported
+ * from Nemesis' shipped high-sample `data/hand_ranking.json` and stored as the 169 hands from
+ * weakest to strongest.
+ *
+ * Percentiles are weighted by combos (pair 6, suited 4, offsuit 12 of 1326), so "the top 15% of
+ * hands" ([Villain.openRaisePct] etc.) means 15% of the hands actually dealt, not 15% of the 169
+ * classes. Nemesis used class-count percentiles.
  */
 object Ranking {
     private val ORDER = listOf(
@@ -22,8 +26,20 @@ object Ranking {
         "ATs", "AJs", "AKo", "AQs", "77", "AKs", "88", "99", "TT", "JJ", "QQ", "KK", "AA",
     )
 
-    private val PERCENTILE: Map<String, Double> =
-        ORDER.withIndex().associate { (i, h) -> h to i.toDouble() / (ORDER.size - 1) }
+    private fun combos(hand: String) = when {
+        hand.length == 2 -> 6
+        hand[2] == 's' -> 4
+        else -> 12
+    }
+
+    /** Combos strictly weaker than the hand, over the combos of every other hand: 32o = 0, AA = 1. */
+    private val PERCENTILE: Map<String, Double> = buildMap {
+        var weaker = 0
+        for (h in ORDER) {
+            put(h, weaker.toDouble() / (1326 - combos(h)))
+            weaker += combos(h)
+        }
+    }
 
     operator fun get(hand: String): Double =
         PERCENTILE[hand] ?: throw InvalidHand("'$hand' is not a canonical 169-class")

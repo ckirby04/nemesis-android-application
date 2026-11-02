@@ -15,7 +15,7 @@ data class SeatUpdate(
 
 /**
  * Offline, keyword-based parsing — Nemesis' `_heuristic` fallbacks. Always
- * available; the Claude path (see [io.github.ckirby04.nemesis.data.remote.ClaudeService])
+ * available; the Claude path (see [io.github.ckirby04.nemesis.data.ClaudeService])
  * upgrades the same outputs when an API key is configured.
  */
 object TableParser {
@@ -111,22 +111,25 @@ object TableParser {
                 t.hasAny("right") -> "right"
                 else -> "all"
             }
-        val archetype = (Archetypes.PRESETS.keys + Archetypes.ALIASES.keys)
-            .firstOrNull { Regex("""\b$it\b""").containsMatchIn(t) }
-            ?.let { Archetypes.ALIASES[it] ?: it }
+        val archetypeMatch = (Archetypes.PRESETS.keys + Archetypes.ALIASES.keys)
+            .firstNotNullOfOrNull { Regex("""\b$it\b""").find(t) }
+        val archetype = archetypeMatch?.value?.let { Archetypes.ALIASES[it] ?: it }
+        // The words that named the archetype aren't also behaviour cues: "calling station" is the station
+        // preset, not the preset plus another +0.25 station. Other cues still add ("a nit who bluffs rivers").
+        val cues = archetypeMatch?.let { t.removeRange(it.range) } ?: t
 
         val d = LinkedHashMap<String, Double>()
-        if (t.hasAny("bluff", "barrel", "fires", "stab")) d["bluffFreq"] = 0.2
-        if (t.hasAny("calls everything", "can't fold", "cant fold", "sticky", "station", "call down", "never folds")) {
+        if (cues.hasAny("bluff", "barrel", "fires", "stab")) d["bluffFreq"] = 0.2
+        if (cues.hasAny("calls everything", "can't fold", "cant fold", "sticky", "station", "call down", "never folds")) {
             d["station"] = 0.25; d["callOpenPct"] = 0.15
         }
-        if (t.hasAny("folds a lot", "nitty", "tight", "weak tight", "folds too much")) {
+        if (cues.hasAny("folds a lot", "nitty", "tight", "weak tight", "folds too much")) {
             d["station"] = -0.2; d["callOpenPct"] = -0.1
         }
-        if (t.hasAny("raises light", "opens wide", "loose", "splashy", "raising a lot")) {
+        if (cues.hasAny("raises light", "opens wide", "loose", "splashy", "raising a lot")) {
             d["openRaisePct"] = 0.12; d["callOpenPct"] = 0.1
         }
-        if (t.hasAny("3bet", "3-bet", "three bet", "reraises")) d["threebetPct"] = 0.05
+        if (cues.hasAny("3bet", "3-bet", "three bet", "reraises")) d["threebetPct"] = 0.05
         return SeatUpdate(target, archetype, d, text.trim().take(80))
     }
 }

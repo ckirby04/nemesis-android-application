@@ -26,6 +26,9 @@ jobs:
       - name: Unit tests
         run: ./gradlew :app:testDebugUnitTest
 
+      - name: Lint
+        run: ./gradlew :app:lintDebug
+
       - name: Build debug and release APKs
         run: ./gradlew :app:assembleDebug :app:assembleRelease
 
@@ -35,6 +38,13 @@ jobs:
         with:
           name: unit-test-reports
           path: app/build/reports/tests/
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.html
 
       - name: Upload release APK
         uses: actions/upload-artifact@v7

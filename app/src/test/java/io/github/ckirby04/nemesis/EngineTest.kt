@@ -68,6 +68,16 @@ class EngineTest {
         assertTrue(Ranking["72o"] <= 0.05)
     }
 
+    @Test fun ranking_percentilesAreWeightedByCombos() {
+        fun combos(h: String) = if (h.length == 2) 6 else if (h[2] == 's') 4 else 12
+        for (pct in listOf(0.03, 0.15, 0.35)) {
+            val share = Hands.ALL_169.filter { Ranking[it] >= 1 - pct }.sumOf(::combos) / 1326.0
+            assertEquals("top $pct of hands", pct, share, 0.02)
+        }
+        assertEquals(1.0, Ranking["AA"], 0.0)
+        assertEquals(0.0, Ranking["32o"], 0.0)
+    }
+
     @Test fun dealing_respectsDeadCards() {
         val rng = Random(1)
         repeat(200) {

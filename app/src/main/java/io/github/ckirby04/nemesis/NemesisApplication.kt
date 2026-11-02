@@ -17,7 +17,9 @@ import io.github.ckirby04.nemesis.data.db.NemesisDatabase
 import io.github.ckirby04.nemesis.sim.SimNotifications
 import io.github.ckirby04.nemesis.sim.SimulationService
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 private val Context.prefsStore by preferencesDataStore("settings")
 private val Context.secretsStore by preferencesDataStore("secrets")
@@ -43,6 +45,14 @@ class AppContainer(
     val tables = TableRepository(table, coach)
     val simulation = SimulationRunner(appScope, coach, runs, tables, settings) {
         SimulationService.start(context.applicationContext)
+    }
+
+    init {
+        // Announced here rather than by the service, so a result still posts after the service hits its
+        // shortService time limit and steps down while the run carries on in-process.
+        appScope.launch(Dispatchers.Main) {
+            simulation.state.collect { SimNotifications.announceIfBackground(context.applicationContext, it) }
+        }
     }
 
     companion object {

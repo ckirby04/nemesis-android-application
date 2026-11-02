@@ -1,12 +1,19 @@
 package io.github.ckirby04.nemesis.sim
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import io.github.ckirby04.nemesis.MainActivity
 import io.github.ckirby04.nemesis.R
 import io.github.ckirby04.nemesis.data.SimState
@@ -66,6 +73,25 @@ object SimNotifications {
             b.setContentText("Reading your table…").setProgress(0, 0, true)
         }
         return b.build()
+    }
+
+    fun canNotify(context: Context) =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    /**
+     * Post "Results ready" / "Simulation failed" for a terminal [state], but only while the user isn't
+     * looking at the app (in the foreground it navigates to the results itself). Call on the main thread.
+     */
+    @Suppress("MissingPermission") // guarded by canNotify()
+    fun announceIfBackground(context: Context, state: SimState) {
+        val n = when (state) {
+            is SimState.Done -> done(context, state.runId)
+            is SimState.Failed -> failed(context, state.message)
+            else -> return
+        }
+        val inBackground = !ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        if (inBackground && canNotify(context)) NotificationManagerCompat.from(context).notify(ID_RESULT, n)
     }
 
     fun done(context: Context, runId: Long): Notification =

@@ -123,8 +123,10 @@ private fun ResultsContent(run: SavedRun, padding: PaddingValues) {
     val ranked = remember(cells, rankView) {
         val sorted = cells.entries.sortedByDescending { it.value.mean }
         when (rankView) {
-            RankView.BEST -> sorted.filter { !it.value.crossesZero }.take(15)
-            RankView.WORST -> sorted.reversed().filter { !it.value.crossesZero }.take(15)
+            // Only hands whose whole interval sits on that side of zero, so a short list never pads
+            // "best" with clear losers (or "worst" with clear winners).
+            RankView.BEST -> sorted.filter { it.value.ciLow > 0 }.take(15)
+            RankView.WORST -> sorted.reversed().filter { it.value.ciHigh < 0 }.take(15)
             RankView.NOISY -> sorted.filter { it.value.crossesZero }.take(15)
         }
     }

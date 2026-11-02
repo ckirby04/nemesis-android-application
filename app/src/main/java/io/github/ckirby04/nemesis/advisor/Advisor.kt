@@ -18,16 +18,22 @@ data class TableProfile(
     /** Players left to act behind [refPos], and the matching [Positions.evScale] the thresholds use. */
     val behind: Int = 2,
     val evScale: Double = 1.0,
+    /** Every other simulated seat, in run order, so the report covers the whole run and not just [refPos]. */
+    val otherSeats: List<SeatEv> = emptyList(),
 ) {
     /** Retrieval query: the description plus the sim's OUTPUT features, so the principles fit what the numbers say. */
     val query: String get() = "$desc. " + flags.joinToString(". ")
 }
 
+/** One seat's per-class EV, with its players behind and [Positions.evScale]. */
+@Serializable
+data class SeatEv(val pos: String, val classEv: Map<String, Double>, val behind: Int, val evScale: Double)
+
 /**
  * RAG advisor, ported from Nemesis' `advisor.py`:
  * 1. [profile] extracts per-class EV and feature flags from the sim results,
  * 2. [TfidfRetriever] pulls the principles that match that profile,
- * 3. the report is written by Claude grounded on them ([GEN_SYSTEM] + [userPrompt]),
+ * 3. the report is written by Claude grounded on them ([GEN_SYSTEM] + [reportPrompt]),
  *    or by the deterministic [offlineReport] when no API key is set.
  */
 object Advisor {
@@ -64,8 +70,12 @@ object Advisor {
     ): TableProfile {
         val pos = refPos ?: results.keys.first()
         val evmap = results.getValue(pos)
-        val ce = CLASSES.mapValues { (_, hs) -> avg(evmap, hs) }
+        fun classEv(evmap: Map<String, Cell>) = CLASSES.mapValues { (_, hs) -> avg(evmap, hs) }
+        val ce = classEv(evmap)
         val s = Positions.evScale(pos, nSeats)
+        val others = results.filterKeys { it != pos }.map { (p, cells) ->
+            SeatEv(p, classEv(cells), Positions.behind(p, nSeats), Positions.evScale(p, nSeats))
+        }
 
         val flags = mutableListOf<String>()
         val sc = ce.getValue("suited_connectors")
@@ -88,7 +98,7 @@ object Advisor {
         else if (villain.stackBb >= 150) flags += "stacks are deep (${fmt0(villain.stackBb)}bb), improving implied odds"
         if (villain.bluffFreq >= 0.2) flags += "opponents bluff and raise aggressively"
 
-        return TableProfile(pos, ce, flags, villain, desc, Positions.behind(pos, nSeats), s)
+        return TableProfile(pos, ce, flags, villain, desc, Positions.behind(pos, nSeats), s, others)
     }
 
     fun retrieve(profile: TableProfile, k: Int = 5): List<Principle> =
@@ -104,7 +114,8 @@ object Advisor {
 
         Write a short, digestible report with these sections:
         - **Table read**: 2-3 sentences on what kind of pool this is.
-        - **What the numbers say**: translate the per-class EV into plain English.
+        - **What the numbers say**: translate the per-class EV into plain English, and note how any
+          other simulated positions differ from the reference one.
         - **How to play it**: 4-6 concrete, specific tips tailored to THIS table.
         - **Leaks to avoid**: 2-3 traps given this pool.
         Ground every claim in the retrieved principles; do not invent poker theory beyond
@@ -127,6 +138,12 @@ object Advisor {
         add("Players left to act behind ${p.refPos}: ${p.behind} (EV magnitudes grow with this, so compare classes rather than raw sizes across positions)")
         add("Per-class avg bb won per open:")
         for ((c, ev) in p.classEv) add("  - ${c.replace('_', ' ')}: ${fmtSigned(ev, 2)} bb")
+        if (p.otherSeats.isNotEmpty()) {
+            add("Other simulated positions (avg bb won per open by class):")
+            for (o in p.otherSeats) {
+                add("  - ${o.pos} (${o.behind} behind): " + o.classEv.entries.joinToString(", ") { (c, ev) -> "${c.replace('_', ' ')} ${fmtSigned(ev, 2)}" })
+            }
+        }
         add("Observed table features: " + p.flags.joinToString("; "))
         val v = p.villain
         add("Model: open ${pct(v.openRaisePct)}, call ${pct(v.callOpenPct)}, station ${"%.2f".format(Locale.US, v.station)}, " +
@@ -187,14 +204,26 @@ object Advisor {
             "not bluffs, and your range discipline preflop matters more than fancy play.\n"
 
         out += "## What the numbers say"
-        out += "- Premiums: **${fmtSigned(ev("premiums"))} bb/open** — ${verdict(ev("premiums"), p.evScale)}. Value gets paid; bet them relentlessly."
+        out += "- Premiums: **${fmtSigned(ev("premiums"))} bb/open** — ${verdict(ev("premiums"), p.evScale)}." +
+            if (ev("premiums") >= 0.5 * p.evScale) " Value gets paid; bet them relentlessly." else ""
         out += "- Broadways: **${fmtSigned(ev("broadways"))} bb/open** — ${verdict(ev("broadways"), p.evScale)}."
         out += "- Medium pairs (99-77): **${fmtSigned(ev("medium_pairs"))} bb/open** — ${verdict(ev("medium_pairs"), p.evScale)}."
         out += "- Suited connectors: **${fmtSigned(ev("suited_connectors"))} bb/open** — ${verdict(ev("suited_connectors"), p.evScale)}."
         out += "- Small pairs (55-22): **${fmtSigned(ev("small_pairs"))} bb/open** — ${verdict(ev("small_pairs"), p.evScale)} " +
             "(set-mining tax at this depth/price)."
         out += "- Suited aces: **${fmtSigned(ev("suited_aces"))} bb/open** — ${verdict(ev("suited_aces"), p.evScale)}."
-        out += "- Offsuit junk/trash: **${fmtSigned(ev("trash"))} bb/open** — clear folds.\n"
+        out += "- Offsuit marginal (A9o-T9o): **${fmtSigned(ev("offsuit_marginal"))} bb/open** — ${verdict(ev("offsuit_marginal"), p.evScale)}."
+        out += "- Offsuit trash: **${fmtSigned(ev("trash"))} bb/open** — ${verdict(ev("trash"), p.evScale)}.\n"
+
+        if (p.otherSeats.isNotEmpty()) {
+            out += "## Other positions"
+            for (o in p.otherSeats) {
+                val byVerdict = CLASSES.keys.filter { !o.classEv.getValue(it).isNaN() }
+                    .groupBy { verdict(o.classEv.getValue(it), o.evScale) }
+                out += "- **${o.pos}**: " + byVerdict.entries.joinToString("; ") { (v, cs) -> "$v — " + cs.joinToString(", ") { it.replace('_', ' ') } }
+            }
+            out += ""
+        }
 
         out += "## How to play it"
         val tips = mutableListOf<String>()
@@ -205,8 +234,9 @@ object Advisor {
         tips += if (ev("suited_connectors") > 0) "Play suited connectors **in position and cheap** (closing the action or " +
             "isolating), where their EV is positive — not as out-of-position calls vs a raise."
         else "Tighten on suited connectors as opens here; the price overruns their implied odds."
-        tips += "**Isolate weak limpers** with a raise rather than over-limping behind, to take initiative, thin the " +
-            "field, and fight the rake."
+        // The sim has no limpers, so this one only appears when retrieval surfaced it for the table.
+        if (retrieved.any { it.id == "isolation-limpers" }) tips += "**Isolate weak limpers** with a raise rather than " +
+            "over-limping behind, to take initiative, thin the field, and fight the rake."
         if (v.openRaisePct >= 0.28 || v.callOpenPct >= 0.45) tips += "Against their wide opens, keep a **linear, " +
             "value-heavy 3-bet range** — punish the trash they raise, don't flat wide out of position."
         tips += "Lean on **range advantage on high boards** (e.g. AK on K-high): c-bet for value across streets " +
